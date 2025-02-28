@@ -1,0 +1,9 @@
+load 0 0 i
+load 1 0 i
+load 2 800 i
+load 3 600 i
+load 4 images\images1.jpeg s
+load 10 program.txt s
+load 14 run.txt s
+drawrectwt 0 1 2 3 4
+switch 14

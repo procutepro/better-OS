@@ -1,0 +1,12 @@
+load 7 60 i
+load 8 255 i
+load 9 100 i
+load 15 1 i
+load 13 boot.txt s
+clear
+getmousepos 5 6
+drawrectwot 5 6 7 7 8 8 8
+sub 9 9 15
+jic 9 109 0 12
+jmp 5
+switch 13
