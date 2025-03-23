@@ -6,6 +6,7 @@ import math
 WINDOW_WIDTH, WINDOW_HEIGHT = 800, 600
 BG_COLOR = (30, 30, 30)
 
+
 def load_program(filename):
     """
     Loads the program instructions from a file.
@@ -15,34 +16,7 @@ def load_program(filename):
         lines = f.readlines()
     return [line.strip() for line in lines if line.strip()]
 
-def execute_instruction(instruction, ram, drawing_surface):
-    """
-    Execute a single instruction on the simulated RAM and drawing surface.
-    
-    Supported instructions:
-      - load <addr> <value>
-      - print <addr>               (prints output to the console)
-      - add <dest> <src1> <src2>
-      - sub <dest> <src1> <src2>
-      - mul <dest> <src1> <src2>
-      - div <dest> <src1> <src2>
-      - sin <dest> <src>
-      - cos <dest> <src>
-      - tan <dest> <src>
-      - drawpixel <x> <y> [<r> <g> <b>]
-      - clear                    (clears the drawing surface)
-      - jmp <line>               (jump unconditionally to line number, 1-indexed)
-      - jic <r1> <r2> <comp_mode> <jump_line>
-            (if the comparison between RAM[r1] and RAM[r2] holds, jump)
-            comp_mode: 0 (equal), 1 (greater), 2 (smaller), 3 (not equal)
-      - switch <filename>        (switch to a different program file in the hd folder)
-      - drawrectwot <x> <y> <sizex> <sizey> [<r> <g> <b>]
-      - drawrectwt <x> <y> <sizex> <sizey> <filename>
-      
-    Returns a tuple: (new_instruction_index, new_instructions)
-      - new_instruction_index is set if a jump is performed (or 0 when switching)
-      - new_instructions is a new list of instructions if the switch command is used, else None.
-    """
+def execute_instruction(instruction, ram, drawing_surface, event, instructions):
     tokens = instruction.split()
     if not tokens:
         return (None, None)
@@ -99,7 +73,7 @@ def execute_instruction(instruction, ram, drawing_surface):
         return (None, None)
 
     if cmd == "drawrectwt":
-        # Expect 7 arguments (after the command) referencing RAM indices.
+        # Expect 5 arguments (after the command) referencing RAM indices.
         args = tokens[1:]
         if len(args) == 5:
             try:
@@ -107,12 +81,18 @@ def execute_instruction(instruction, ram, drawing_surface):
                 y     = ram[int(args[1])]
                 sizex = ram[int(args[2])]
                 sizey = ram[int(args[3])]
-                file_name = ram[int(args[4])]  # Ensure this is a string!
-                file_path = os.path.join("hd", file_name)
+                # Strip any extra whitespace/newlines from the file name.
+                file_name = str(ram[int(args[4])]).strip()
+                base_path = r"C:\Users\Pratyush\Downloads\pratyushs_files\VS_code\python\network\computer 1\Better computer\hd"
+                file_path = os.path.join(base_path, file_name)
+                if not os.path.exists(file_path):
+                    print(f"Error: file {file_path} not found.")
+                    return (None, None)
                 texture = pygame.image.load(file_path)
-                drawing_surface.blit(pygame.transform.scale(texture, (sizex, sizey)), (x, y))
-            except ValueError:
-                pass
+                scaled_texture = pygame.transform.scale(texture, (sizex, sizey))
+                drawing_surface.blit(scaled_texture, (x, y))
+            except ValueError as e:
+                print("Error in drawrectwt:", e)
         return (None, None)
 
     if cmd == "load":
@@ -121,7 +101,7 @@ def execute_instruction(instruction, ram, drawing_surface):
             return (None, None)
         try:
             addr = int(tokens[1])
-            value = (tokens[2])
+            value = tokens[2]
             if tokens[3] == "i":
                 value = float(value)
             elif tokens[3] == "s":
@@ -221,7 +201,6 @@ def execute_instruction(instruction, ram, drawing_surface):
         try:
             r1 = int(tokens[1])
             r2 = int(tokens[2])
-            print(r1, r2)
             comp_mode = int(tokens[3])
             jump_line = int(tokens[4])
             if r1 >= len(ram) or r2 >= len(ram):
@@ -252,14 +231,29 @@ def execute_instruction(instruction, ram, drawing_surface):
             return (None, None)
     
     if cmd == "getmousepos":
-        ram[int(tokens[1])], ram[int(tokens[2])] =pygame.mouse.get_pos() 
+        ram[int(tokens[1])], ram[int(tokens[2])] = pygame.mouse.get_pos() 
+    
+    if cmd == "hasclicked?":
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            ram[int(tokens[1])] = 1
+        else:
+            ram[int(tokens[1])] = 0
+    
+    if cmd == "readline":
+        f = os.path.join(r"C:\Users\Pratyush\Downloads\pratyushs_files\VS_code\python\network\computer 1\Better computer\hd", ram[int(tokens[1])])
+        with open(f) as file:
+            lines = file.readlines()
+            if tokens[4] == "i":
+                ram[int(tokens[3])] = float(lines[int(tokens[2])])
+            if tokens[4] == "s":
+                ram[int(tokens[3])] = str(lines[int(tokens[2])])
+        return (None, None)
 
     if cmd == "switch":
         # New instruction to switch program files
         if len(tokens) < 2:
             print("Error: 'switch' expects 1 argument: filename")
             return (None, None)
-        print(ram)
         new_filename = ram[int(tokens[1])]
         new_path = os.path.join("hd", new_filename)
         if not os.path.exists(new_path):
@@ -271,8 +265,6 @@ def execute_instruction(instruction, ram, drawing_surface):
 
     print(f"Unknown instruction: {instruction}")
     return (None, None)
-
-    
 
 def main():
     pygame.init()
@@ -288,17 +280,18 @@ def main():
     ram = [0] * 1024
 
     # Load the program from the hard drive (hd folder)
-    program_file = os.path.join("hd", "boot.txt")
+    program_file = os.path.join(r"C:\Users\Pratyush\Downloads\pratyushs_files\VS_code\python\network\computer 1\Better computer\hd", "boot.txt")
+    print(program_file)
     if not os.path.exists(program_file):
-        print("Program file not found in 'hd/programs.txt'!")
+        print("Program file not found in 'hd/boot.txt'!")
         instructions = []
     else:
         instructions = load_program(program_file)
         print("Program loaded from 'hd/programs.txt'. Starting execution...")
 
     instruction_index = 0
-
     running = True
+
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -306,7 +299,7 @@ def main():
 
         if instruction_index < len(instructions):
             instr = instructions[instruction_index]
-            jump_index, new_prog = execute_instruction(instr, ram, drawing_surface)
+            jump_index, new_prog = execute_instruction(instr, ram, drawing_surface, event, instructions)
             if new_prog is not None:
                 # Switch to the new program file
                 instructions = new_prog
